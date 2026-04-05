@@ -1,6 +1,7 @@
 ﻿using EmlakPortal.API.DTOs;
 using EmlakPortal.API.Models;
 using EmlakPortal.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -67,6 +68,46 @@ namespace EmlakPortal.API.Controllers
             }
 
             return Unauthorized(new ResultDto { Status = false, Message = "Kullanıcı adı veya şifre hatalı!" });
+        }
+
+        // SADECE MEVCUT BİR ADMİN BAŞKASINA YETKİ VEREBİLİR
+        [Authorize(Roles = "Admin")]
+        [HttpPost("MakeAdmin")]
+        public async Task<IActionResult> MakeAdmin(string userName)
+        {
+            var user = await _userManager.FindByNameAsync(userName);
+            if (user == null)
+                return NotFound(new ResultDto { Status = false, Message = "Kullanıcı bulunamadı." });
+
+            // Kullanıcıya Admin rolünü ekle
+            await _userManager.AddToRoleAsync(user, "Admin");
+
+            return Ok(new ResultDto { Status = true, Message = $"{userName} artık bir emlak yöneticisi (Admin)!" });
+        }
+
+        // SADECE MEVCUT BİR ADMİN BAŞKASININ YETKİSİNİ GERİ ALABİLİR
+        [Authorize(Roles = "Admin")]
+        [HttpPost("RevokeAdmin")]
+        public async Task<IActionResult> RevokeAdmin(string userName)
+        {
+            var user = await _userManager.FindByNameAsync(userName);
+            if (user == null)
+                return NotFound(new ResultDto { Status = false, Message = "Kullanıcı bulunamadı." });
+
+            // Kullanıcının Admin olup olmadığını kontrol et
+            var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+            if (!isAdmin)
+                return BadRequest(new ResultDto { Status = false, Message = "Bu kullanıcı zaten yönetici değil." });
+
+            // Kullanıcıdan Admin rolünü sil
+            var result = await _userManager.RemoveFromRoleAsync(user, "Admin");
+
+            if (result.Succeeded)
+            {
+                return Ok(new ResultDto { Status = true, Message = $"{userName} adlı kullanıcının yönetici yetkisi başarıyla alındı!" });
+            }
+
+            return BadRequest(new ResultDto { Status = false, Message = "Yetki alınırken bir sorun oluştu." });
         }
     }
 }
